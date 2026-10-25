@@ -1,0 +1,12 @@
+# Кто в какие топики может писать/читать (топики из ТЗ, раздел 3)
+
+# Бэкенд видит и может всё
+user backend
+topic readwrite #
+topic read $SYS/#
+
+# Устройства: датчик и реле шлют данные, реле слушает команды
+user device
+topic write device/+/telemetry
+topic write relay/+/power
+topic read relay/+/command

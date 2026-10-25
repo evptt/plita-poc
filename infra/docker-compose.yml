@@ -1,0 +1,105 @@
+# Вся инфраструктура PoC "контроль плиты".
+# Запуск:   docker compose up -d
+# Эмулятор: docker compose --profile emulator up -d
+
+services:
+  # ---------- MQTT-брокер: сюда пишут датчик и реле ----------
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    restart: unless-stopped
+    ports:
+      - "1883:1883"            # открыт наружу — к нему подключаются устройства
+    environment:
+      MQTT_BACKEND_PASSWORD: ${MQTT_BACKEND_PASSWORD}
+      MQTT_DEVICE_PASSWORD: ${MQTT_DEVICE_PASSWORD}
+    # при каждом старте: копируем конфиг с правильными правами и пересоздаём файл паролей из .env
+    command: >
+      sh -c "cp /conf-src/* /mosquitto/config/ &&
+             mosquitto_passwd -c -b /mosquitto/config/passwd backend \"$$MQTT_BACKEND_PASSWORD\" &&
+             mosquitto_passwd -b /mosquitto/config/passwd device \"$$MQTT_DEVICE_PASSWORD\" &&
+             chown -R mosquitto:mosquitto /mosquitto/config && chmod 0700 /mosquitto/config/* &&
+             exec mosquitto -c /mosquitto/config/mosquitto.conf"
+    volumes:
+      - ./mosquitto/config:/conf-src:ro
+      - mosquitto_data:/mosquitto/data
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -h localhost -u backend -P \"$$MQTT_BACKEND_PASSWORD\" -t '$$SYS/broker/uptime' -C 1 -W 3"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ---------- База данных ----------
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "127.0.0.1:5432:5432"  # только локально на сервере, наружу НЕ торчит
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro   # схема из ТЗ, применяется при первом запуске
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------- Бэкенд (сейчас заглушка, бэкендеры заменят на свой код) ----------
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      MQTT_HOST: mosquitto
+      MQTT_PORT: 1883
+      MQTT_USER: backend
+      MQTT_PASSWORD: ${MQTT_BACKEND_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+    depends_on:
+      db:
+        condition: service_healthy
+      mosquitto:
+        condition: service_started
+    expose:
+      - "8000"
+
+  # ---------- HTTPS-прокси: автоматически получает сертификат Let's Encrypt ----------
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+
+  # ---------- Эмулятор датчика и реле (запускается только с --profile emulator) ----------
+  emulator:
+    build: ./emulator
+    profiles: ["emulator"]
+    restart: unless-stopped
+    environment:
+      MQTT_HOST: mosquitto
+      MQTT_USER: device
+      MQTT_PASSWORD: ${MQTT_DEVICE_PASSWORD}
+      SENSOR_ID: emu-sensor-1
+      RELAY_ID: emu-relay-1
+      SENSOR_INTERVAL: 10
+    depends_on:
+      - mosquitto
+
+volumes:
+  mosquitto_data:
+  db_data:
+  caddy_data:
+  caddy_config:

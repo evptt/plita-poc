@@ -1,0 +1,45 @@
+# Автодеплой: любой пуш в main, который меняет infra/, выкатывается на сервер.
+# Нужные настройки репозитория (Settings → Secrets and variables → Actions):
+#   secrets.DEPLOY_SSH_KEY     — приватный SSH-ключ пользователя deploy
+#   secrets.DEPLOY_KNOWN_HOSTS — отпечаток сервера (защита от подмены)
+#   vars.DEPLOY_HOST           — IP сервера
+#   vars.API_URL               — адрес API для проверки после деплоя
+name: deploy
+
+on:
+  push:
+    branches: [main]
+    paths: ["infra/**", ".github/workflows/deploy.yml"]
+  workflow_dispatch:
+
+concurrency: deploy
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Настроить SSH
+        env:
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Залить файлы на сервер
+        run: tar czf - --exclude=infra/.env --exclude=infra/backups infra | ssh deploy@${{ vars.DEPLOY_HOST }} 'tar xzf - -C ~'
+
+      - name: Перезапустить сервисы
+        run: ssh deploy@${{ vars.DEPLOY_HOST }} 'cd ~/infra && docker compose up -d --build --remove-orphans && docker compose ps'
+
+      - name: Проверить, что API живой
+        run: |
+          for i in $(seq 1 12); do
+            curl -fsS "${{ vars.API_URL }}/health" && exit 0
+            sleep 5
+          done
+          echo "API не ответил после деплоя"; exit 1

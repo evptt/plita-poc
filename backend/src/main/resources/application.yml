@@ -1,0 +1,45 @@
+# Контракт из отчёта по инфраструктуре: порт 8000 на 0.0.0.0, HTTPS делает Caddy, логи в stdout.
+# Подключение к БД и MQTT берётся из переменных окружения (см. AppSettings), не отсюда.
+server:
+  port: 8000
+  address: 0.0.0.0
+  forward-headers-strategy: native
+  shutdown: graceful
+  tomcat:
+    threads:
+      max: 50
+      min-spare: 4
+    accept-count: 50
+
+spring:
+  application:
+    name: plita-backend
+  main:
+    banner-mode: off
+  jackson:
+    # JSON API в snake_case (home_id, sensor_id, access_token ...), как договорено с мобильной командой
+    property-naming-strategy: SNAKE_CASE
+    serialization:
+      write-dates-as-timestamps: false
+  flyway:
+    # на уже созданной базе (infra/db/init/001_schema.sql) Flyway ставит отметку 0 и применяет V1, V2;
+    # V1 написана через IF NOT EXISTS и существующие таблицы не трогает
+    baseline-on-migrate: true
+    baseline-version: 0
+    locations: classpath:db/migration
+  lifecycle:
+    timeout-per-shutdown-phase: 10s
+
+springdoc:
+  api-docs:
+    path: /openapi.json
+  swagger-ui:
+    path: /docs
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level %logger{20}: %msg%n"
+  level:
+    root: INFO
+    org.flywaydb: INFO
+    com.zaxxer.hikari: WARN

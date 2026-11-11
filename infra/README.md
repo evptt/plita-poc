@@ -3,7 +3,8 @@
 ## Что тут лежит и зачем
 
 ```
-Датчик / Реле ──MQTT:1883──► [mosquitto] ◄──► [backend] ──► [db: PostgreSQL]
+Датчик ────────MQTT:1883──► [mosquitto] ◄──► [backend] ──► [db: PostgreSQL]
+Автомат Tongou ──Wi-Fi──► Tuya Cloud ◄──OpenAPI── [backend] ──FCM──► push на телефон
 Мобилка ──────HTTPS:443────► [caddy] ─────────► [backend]
 ```
 
@@ -13,8 +14,8 @@
 | `mosquitto/` | MQTT-брокер: с логинами и правами на топики |
 | `db/init/001_schema.sql` | Таблицы из ТЗ (Users, Homes, Devices, Telemetry_History) |
 | `caddy/` | HTTPS-прокси, сертификат получает сам |
-| `backend/` | **Заглушка.** Бэкендеры кладут сюда свой код (порт 8000, `GET /health`) |
-| `emulator/` | Фейковые датчик и реле, шлют данные, как настоящие |
+| `backend/` | Бэкенд на Java 21 / Spring Boot (порт 8000, `GET /health`), см. `backend/README.md` |
+| `emulator/` | Фейковые датчик и реле через MQTT — для разработки без железа |
 | `scripts/` | Настройка сервера, генерация паролей, бэкапы |
 
 ---
@@ -137,12 +138,28 @@ GitHub Actions (`.github/workflows/deploy.yml`). Тот заливает фай�
   (`mosquitto:1883`, логин `backend`) уже передаются в контейнер `backend` через переменные окружения.
   Их сервис должен слушать порт 8000. Схема из `db/init` — стартовая, дальше миграции на них.
 - **Железячникам:** брокер `IP_СЕРВЕРА:1883`, логин `device`, пароль — `MQTT_DEVICE_PASSWORD` из `.env`
-  (передавать лично, не в общий чат).
+  (передавать лично, не в общий чат). Это только для датчика: автомат Tongou остаётся на прошивке Tuya
+  и работает через Tuya Cloud.
 - **Мобильщикам:** базовый URL API `https://IP-С-ДЕФИСАМИ.sslip.io`.
 
-## Открытые вопросы (влияют на инфраструктуру)
+## Секреты Tuya и Firebase (дописать в `.env` на сервере)
 
-1. Формат пакета `relay/power` в ТЗ не описан — эмулятор пока шлёт JSON.
-2. Порядок байт в 13-байтовом пакете датчика не указан — эмулятор шлёт little-endian.
-3. Канал «красного экрана» (push / WebSocket / SSE) не выбран. Если WebSocket — Caddy его пробрасывает без доп. настроек; если push — понадобится Firebase.
+После перехода на Java-бэкенд в `.env` нужны новые строки — образец в `.env.example`.
+Пока их нет, бэкенд работает: без Tuya — только с эмулятором реле, без Firebase — без push.
+
+| Переменная | Откуда взять |
+|---|---|
+| `TUYA_ACCESS_ID`, `TUYA_ACCESS_SECRET` | platform.tuya.com → Cloud → проект → Overview (как создать проект — `backend/README.md`, «Tuya Cloud») |
+| `TUYA_ENDPOINT` | дата-центр проекта, по умолчанию Central Europe `https://openapi.tuyaeu.com` |
+| `FIREBASE_SERVICE_ACCOUNT` | Firebase Console → Project settings → Service accounts → Generate new private key, затем `base64 -w0 key.json` |
+| `DEV_AUTH_ENABLED` | `true` только пока нет `GOOGLE_CLIENT_ID`, потом `false` |
+
+Применить: `docker compose up -d backend`. Проверить: `curl https://<домен>/health` → `"tuya": true, "push": true`.
+
+## Ответы заказчика (26.10.2026)
+
+1. Реле — автомат Tongou TO-Q-SY2-JWT на заводской прошивке Tuya. Топики `relay/*` на нашем брокере
+   нужны только эмулятору; бэкенд ходит за данными и командами в Tuya Cloud.
+2. Порядок байт в 13-байтовом пакете датчика — little-endian (ESP32-C3).
+3. «Красный экран» — push через Firebase. WebSocket тоже работает, Caddy его пробрасывает.
 4. Когда появится нормальный домен — просто поменять `DOMAIN` в `.env` и `docker compose up -d`.

@@ -17,7 +17,7 @@ concurrency: deploy
 jobs:
   deploy:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 25   # первая сборка Java на сервере качает зависимости Maven
     steps:
       - uses: actions/checkout@v5
 
@@ -38,7 +38,8 @@ jobs:
 
       - name: Проверить, что API живой
         run: |
-          for i in $(seq 1 12); do
+          # Spring Boot на 1 vCPU стартует до минуты, плюс миграции Flyway
+          for i in $(seq 1 36); do
             curl -fsS "${{ vars.API_URL }}/health" && exit 0
             sleep 5
           done

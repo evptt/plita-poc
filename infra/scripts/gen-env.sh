@@ -17,6 +17,13 @@ MQTT_BACKEND_PASSWORD=$(pw)
 MQTT_DEVICE_PASSWORD=$(pw)
 JWT_SECRET=$(openssl rand -hex 32)
 GOOGLE_CLIENT_ID=
+DEV_AUTH_ENABLED=false
+TUYA_ACCESS_ID=
+TUYA_ACCESS_SECRET=
+TUYA_ENDPOINT=https://openapi.tuyaeu.com
+TUYA_POLL_INTERVAL_S=120
+FIREBASE_SERVICE_ACCOUNT=
+FIREBASE_ANDROID_CHANNEL_ID=
 EOF
 chmod 600 .env
 echo "Готово. API будет доступен по адресу: https://${IP//./-}.sslip.io"

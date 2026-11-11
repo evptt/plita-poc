@@ -5,7 +5,8 @@ user backend
 topic readwrite #
 topic read $SYS/#
 
-# Устройства: датчик и реле шлют данные, реле слушает команды
+# Устройства: датчик шлёт данные. Топики relay/* нужны только эмулятору реле:
+# настоящий автомат Tongou работает через Tuya Cloud и к брокеру не подключается.
 user device
 topic write device/+/telemetry
 topic write relay/+/power

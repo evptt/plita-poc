@@ -3,7 +3,7 @@
 # Эмулятор: docker compose --profile emulator up -d
 
 services:
-  # ---------- MQTT-брокер: сюда пишут датчик и реле ----------
+  # ---------- MQTT-брокер: сюда пишет датчик (и эмулятор реле; настоящий автомат Tongou ходит в Tuya Cloud) ----------
   mosquitto:
     image: eclipse-mosquitto:2.0
     restart: unless-stopped
@@ -47,7 +47,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # ---------- Бэкенд (сейчас заглушка, бэкендеры заменят на свой код) ----------
+  # ---------- Бэкенд: Java 21 / Spring Boot, см. backend/README.md ----------
   backend:
     build: ./backend
     restart: unless-stopped
@@ -58,7 +58,22 @@ services:
       MQTT_USER: backend
       MQTT_PASSWORD: ${MQTT_BACKEND_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      # вход без Google (POST /api/v1/auth/dev) - только пока мобильщики не создали OAuth-клиента
+      DEV_AUTH_ENABLED: ${DEV_AUTH_ENABLED:-false}
+      # силовой автомат Tongou на прошивке Tuya: данные и команды через Tuya Cloud OpenAPI
+      TUYA_ENDPOINT: ${TUYA_ENDPOINT:-https://openapi.tuyaeu.com}
+      TUYA_ACCESS_ID: ${TUYA_ACCESS_ID:-}
+      TUYA_ACCESS_SECRET: ${TUYA_ACCESS_SECRET:-}
+      TUYA_POLL_INTERVAL_S: ${TUYA_POLL_INTERVAL_S:-120}
+      TUYA_SWITCH_CODE: ${TUYA_SWITCH_CODE:-switch}
+      TUYA_CURRENT_CODE: ${TUYA_CURRENT_CODE:-cur_current}
+      TUYA_CURRENT_SCALE: ${TUYA_CURRENT_SCALE:-0.001}
+      TUYA_VOLTAGE_CODE: ${TUYA_VOLTAGE_CODE:-cur_voltage}
+      TUYA_VOLTAGE_SCALE: ${TUYA_VOLTAGE_SCALE:-0.1}
+      # push «красного экрана»: ключ сервисного аккаунта Firebase (JSON в base64)
+      FIREBASE_SERVICE_ACCOUNT: ${FIREBASE_SERVICE_ACCOUNT:-}
+      FIREBASE_ANDROID_CHANNEL_ID: ${FIREBASE_ANDROID_CHANNEL_ID:-}
     depends_on:
       db:
         condition: service_healthy
@@ -83,7 +98,7 @@ services:
     depends_on:
       - backend
 
-  # ---------- Эмулятор датчика и реле (запускается только с --profile emulator) ----------
+  # ---------- Эмулятор датчика и реле через MQTT, для работы без железа (только с --profile emulator) ----------
   emulator:
     build: ./emulator
     profiles: ["emulator"]

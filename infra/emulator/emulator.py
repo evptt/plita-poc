@@ -2,9 +2,10 @@
 
 Датчик: device/{SENSOR_ID}/telemetry, 13 байт раз в SENSOR_INTERVAL сек:
     float влажность, float температура, float VOC, uint8 радар.
-    Порядок байт в ТЗ не указан — берём little-endian (так у ESP32/STM32). Уточнить у железячников!
-Реле: relay/{RELAY_ID}/power раз в секунду.
-    Формат в ТЗ НЕ описан — временно шлём JSON {"voltage", "current", "state"}. Уточнить у заказчика!
+    Порядок байт little-endian — подтверждено железячниками (ESP32-C3).
+Реле: relay/{RELAY_ID}/power раз в секунду, JSON {"voltage", "current", "state"}.
+    Это только замена для разработки: настоящий автомат Tongou TO-Q-SY2-JWT остаётся на прошивке Tuya,
+    бэкенд забирает его данные и шлёт команды через Tuya Cloud OpenAPI, к нашему брокеру автомат не подключается.
 Реле слушает relay/{RELAY_ID}/command: "0" — выключить плиту, "1" — включить.
 """
 import json

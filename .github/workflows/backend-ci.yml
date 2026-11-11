@@ -7,9 +7,6 @@ name: backend-ci
 on:
   pull_request:
     paths: ["infra/**", ".github/workflows/backend-ci.yml"]
-  push:
-    branches-ignore: [main]
-    paths: ["infra/**", ".github/workflows/backend-ci.yml"]
   workflow_dispatch:
 
 concurrency:
